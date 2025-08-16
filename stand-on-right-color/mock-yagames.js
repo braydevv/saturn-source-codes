@@ -1,5 +1,5 @@
 // mock-yagames.js
-// Mock YaGames for local testing / school-safe version
+// Mock YaGames SDK for local/school-safe testing
 if (typeof YaGames === "undefined") {
   var YaGames = {
     init: function() {
@@ -12,7 +12,12 @@ if (typeof YaGames === "undefined") {
         payments: {
           purchase: (id) => console.log("Purchase mocked:", id)
         },
-        getLeaderboard: () => ({ getPlayerPosition: () => 0 })
+        shortcut: {
+          canShowPrompt: () => Promise.resolve({ canShow: false })
+        },
+        feedback: {
+          canReview: () => Promise.resolve({ value: false, reason: "local mock" })
+        }
       });
     }
   };
