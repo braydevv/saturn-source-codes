@@ -149,50 +149,65 @@
             });
         };
 
-        InitYandex();
-        function InitYandex() {
-            YaGames.init()
-                .then(ysdk => {
-                    console.log('Init Yandex SDK');
-                    window.ysdk = ysdk;
-                    InitPayments();
 
-                    try {
-                        ysdk.shortcut.canShowPrompt().then(prompt => {
-                            if (prompt.canShow) {
-                                promptCanShow = true;
-                            }
-                        });
-                    } catch (e) {
-                        console.error('CRASH canShowPrompt: ', e.message);
-                    }
-
-                    try {
-                        ysdk.feedback.canReview().then(({ value, reason }) => {
-                            if (value) {
-                                reviewCanShow = true;
-                            } else {
-                                console.log('reviewCanShow = false', reason)
-                            }
-                        })
-
-                        ysdk.shortcut.canShowPrompt().then(prompt => {
-                            if (prompt.canShow) {
-                                promptCanShow = true;
-                            }
-                        });
-                    } catch (e) {
-                        console.error('CRASH canShowFeedback: ', e.message);
-                    }
-
-                    FullAdShow(); // First ad true
-
-                    if (initGame) {
-                        InitPlayer(photoSizeForInit, scopesForInit);
-                    }
-                    initSDK = true;
-                });
+  // School-safe, file:// compatible InitYandex
+  function InitYandex() {
+    // Mock YaGames completely
+    if (typeof YaGames === "undefined") {
+      var YaGames = {
+        init: function() {
+          console.log("YaGames is mocked locally");
+          return {
+            then: function(callback) {
+              // Immediately call the callback with a mock ysdk
+              const ysdk = {
+                player: {
+                  getName: () => "LocalPlayer",
+                  getID: () => "local123"
+                },
+                payments: {
+                  purchase: (id) => console.log("Purchase mocked:", id)
+                },
+                shortcut: {
+                  canShowPrompt: () => ({ canShow: false })
+                },
+                feedback: {
+                  canReview: () => ({ value: false, reason: "local mock" })
+                }
+              };
+              callback(ysdk);
+              return { catch: () => {} }; // mock catch
+            }
+          };
         }
+      };
+    }
+
+    // Call the mocked init
+    YaGames.init()
+      .then(ysdk => {
+        console.log('Init Yandex SDK (mocked for file://)');
+        window.ysdk = ysdk;
+
+        // Call game initialization safely
+        try {
+          const prompt = ysdk.shortcut.canShowPrompt();
+          if (prompt.canShow) promptCanShow = true;
+        } catch (e) { console.error(e); }
+
+        try {
+          const feedback = ysdk.feedback.canReview();
+          if (feedback.value) reviewCanShow = true;
+        } catch (e) { console.error(e); }
+
+        FullAdShow(); // Optional: can skip ads
+        if (initGame) InitPlayer(photoSizeForInit, scopesForInit);
+        initSDK = true;
+      });
+  }
+
+  // Run it safely immediately
+  InitYandex();
 
         function InitGame(photoSize, scopes, gameReadyApi) {
             console.log('Init GAME');
