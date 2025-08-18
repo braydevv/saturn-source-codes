@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+  <meta charset="utf-8"/>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Stand on the right color, Robby! (Bridge Version)</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+    }
+    
+    #unity-container {
+      width: 100%;
+      height: 100%;
+    }
+    
+    #unity-canvas {
+      width: 100%;
+      height: 100%;
+      background: url('background.jpeg') center / cover;
+    }
+    
+    #unity-loading-bar {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    #unity-logo {
+      width: 154px;
+      height: 130px;
+      background: url('logo.png') no-repeat center;
+      margin-bottom: 10px;
+    }
+    
+    #unity-progress-bar-empty {
+      width: 141px;
+      height: 18px;
+      margin-top: 10px;
+      background: url('TemplateData/progress-bar-empty-dark.png') no-repeat center;
+    }
+    
+    #unity-progress-bar-full {
+      width: 0%;
+      height: 18px;
+      margin-top: 10px;
+      background: url('TemplateData/progress-bar-full-dark.png') no-repeat center;
+    }
+    
+    .spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+  </style>
+  
+  <!-- Load the Unity Bridge script -->
+  <script src="unity-bridge.js"></script>
+</head>
+<body>
+  <div id="unity-container">
+    <canvas id="unity-canvas"></canvas>
+    <div id="unity-loading-bar">
+      <div id="unity-logo"></div>
+      <div id="unity-progress-bar-empty" style="display: none;">
+        <div id="unity-progress-bar-full"></div>
+      </div>
+      <div class="spinner"></div>
+    </div>
+  </div>
+  
+  <script>
+    // Disable right-click context menu
+    document.addEventListener('contextmenu', event => event.preventDefault());
+    
+    // Create a comprehensive mock of the Yandex SDK
+    const mockSDK = {
+      // Game provider methods
+      gameplayStart: function() {
+        console.log("Mock: gameplayStart called");
+        return Promise.resolve();
+      },
+      gameplayStop: function() {
+        console.log("Mock: gameplayStop called");
+        return Promise.resolve();
+      },
+      
+      // Player methods
+      getPlayer: function() {
+        console.log("Mock: getPlayer called");
+        return Promise.resolve({
+          getName: function() { return "LocalPlayer"; },
+          getPhoto: function() { return null; },
+          getUniqueID: function() { return "local-player-id"; },
+          getMode: function() { return "resolved"; },
+          setData: function(data) {
+            console.log("Mock: player.setData called with data:", data);
+            return Promise.resolve();
+          },
+          getData: function(keys) {
+            console.log("Mock: player.getData called with keys:", keys);
+            return Promise.resolve({ saves: null });
+          }
+        });
+      },
+      
+      // Advertising methods
+      adv: {
+        showFullscreenAdv: function(options) {
+          console.log("Mock: showFullscreenAdv called");
+          if (options && options.callbacks) {
+            if (options.callbacks.onOpen) options.callbacks.onOpen();
+            setTimeout(() => {
+              if (options.callbacks.onClose) options.callbacks.onClose(true);
+            }, 300);
+          }
+        },
+        showRewardedVideo: function(options) {
+          console.log("Mock: showRewardedVideo called");
+          if (options && options.callbacks) {
+            if (options.callbacks.onOpen) options.callbacks.onOpen();
+            setTimeout(() => {
+              if (options.callbacks.onRewarded) options.callbacks.onRewarded();
+              if (options.callbacks.onClose) options.callbacks.onClose();
+            }, 300);
+          }
+        }
+      },
+      
+      // Leaderboard methods
+      getLeaderboards: function() {
+        console.log("Mock: getLeaderboards called");
+        return Promise.resolve({
+          setLeaderboardScore: function(name, score) {
+            console.log("Mock: setLeaderboardScore called with name:", name, "score:", score);
+            return Promise.resolve();
+          },
+          getLeaderboardEntries: function(name, options) {
+            console.log("Mock: getLeaderboardEntries called with name:", name, "options:", options);
+            return Promise.resolve({ entries: [] });
+          }
+        });
+      },
+      
+      // Environment and device info
+      environment: {
+        i18n: {
+          lang: "en",
+          tld: "com"
+        },
+        browser: {
+          lang: "en"
+        },
+        app: {
+          id: "mock-app-id"
+        },
+        payload: {}
+      },
+      deviceInfo: {
+        type: "desktop",
+        isMobile: function() { return false; },
+        isDesktop: function() { return true; },
+        isTablet: function() { return false; },
+        isTV: function() { return false; }
+      }
+    };
+    
+    // Set up the mock SDK
+    window.ysdk = mockSDK;
+    
+    // Mock YaGames.init() to return our mock SDK
+    window.YaGames = {
+      init: function() {
+        console.log("YaGames.init() called");
+        return Promise.resolve(mockSDK);
+      }
+    };
+    
+    // Unity configuration
+    const buildUrl = "Build";
+    const loaderUrl = buildUrl + "/Stand_on_the_right_color_Robby.loader.js";
+    const config = {
+      dataUrl: buildUrl + "/Stand_on_the_right_color_Robby.data.unityweb",
+      frameworkUrl: buildUrl + "/Stand_on_the_right_color_Robby.framework.js.unityweb",
+      codeUrl: buildUrl + "/Stand_on_the_right_color_Robby.wasm.unityweb",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "oriken studio",
+      productName: "Stand on the right color, Robby!",
+      productVersion: "0.0.0.4"
+    };
+
+    const container = document.querySelector("#unity-container");
+    const canvas = document.querySelector("#unity-canvas");
+    const loadingBar = document.querySelector("#unity-loading-bar");
+    const progressBarEmpty = document.querySelector("#unity-progress-bar-empty");
+    const progressBarFull = document.querySelector("#unity-progress-bar-full");
+    const spinner = document.querySelector('.spinner');
+
+    // Load the Unity loader script
+    const script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = () => {
+      // Create the Unity instance
+      createUnityInstance(canvas, config, (progress) => {
+        spinner.style.display = "none";
+        progressBarEmpty.style.display = "";
+        progressBarFull.style.width = `${100 * progress}%`;
+      }).then((unityInstance) => {
+        window.myGameInstance = unityInstance;
+        loadingBar.style.display = "none";
+        
+        // Initialize the Unity Bridge with our Unity instance
+        window.UnityBridge.init(unityInstance);
+        
+        // Set the SDK instance in the bridge
+        window.UnityBridge.setSDK(mockSDK);
+        
+      }).catch((message) => {
+        alert(message);
+      });
+    };
+
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
