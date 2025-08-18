@@ -8,8 +8,8 @@
 <link rel="shortcut icon" href="TemplateData/favicon.ico"/>
 <link rel="stylesheet" href="TemplateData/style.css"/>
 <!-- Yandex Games SDK -->
-<script src="/sdk.js"></script>
-<script src="/mock-yagames.js"></script>
+<script src="sdk.js"></script>
+<script src="mock-yagames.js"></script>
 <!-- Additional head modules -->
 <script type="text/javascript">
         window.yandexMetricaCounterId = parseInt(95490282);
@@ -77,10 +77,10 @@
             dataUrl: buildUrl + "/Stand_on_the_right_color_Robby.data.unityweb",
             frameworkUrl: buildUrl + "/Stand_on_the_right_color_Robby.framework.js.unityweb",
             codeUrl: buildUrl + "/Stand_on_the_right_color_Robby.wasm.unityweb",
-        streamingAssetsUrl: "StreamingAssets",
+            streamingAssetsUrl: "StreamingAssets",
             companyName: "oriken studio",
             productName: "Stand on the right color, Robby!",
-            productVersion: "0.0.0.4",
+            productVersion: "0.0.0.4"
         };
 
         const container = document.querySelector("#unity-container");
@@ -152,38 +152,7 @@
 
   // School-safe, file:// compatible InitYandex
   function InitYandex() {
-    // Mock YaGames completely
-    if (typeof YaGames === "undefined") {
-      var YaGames = {
-        init: function() {
-          console.log("YaGames is mocked locally");
-          return {
-            then: function(callback) {
-              // Immediately call the callback with a mock ysdk
-              const ysdk = {
-                player: {
-                  getName: () => "LocalPlayer",
-                  getID: () => "local123"
-                },
-                payments: {
-                  purchase: (id) => console.log("Purchase mocked:", id)
-                },
-                shortcut: {
-                  canShowPrompt: () => ({ canShow: false })
-                },
-                feedback: {
-                  canReview: () => ({ value: false, reason: "local mock" })
-                }
-              };
-              callback(ysdk);
-              return { catch: () => {} }; // mock catch
-            }
-          };
-        }
-      };
-    }
-
-    // Call the mocked init
+    // Call the YaGames.init() from our mock implementation
     YaGames.init()
       .then(ysdk => {
         console.log('Init Yandex SDK (mocked for file://)');
@@ -191,16 +160,20 @@
 
         // Call game initialization safely
         try {
-          const prompt = ysdk.shortcut.canShowPrompt();
-          if (prompt.canShow) promptCanShow = true;
+          ysdk.shortcut.canShowPrompt().then(prompt => {
+            if (prompt.canShow) promptCanShow = true;
+          }).catch(e => console.error('Error in canShowPrompt:', e));
         } catch (e) { console.error(e); }
 
         try {
-          const feedback = ysdk.feedback.canReview();
-          if (feedback.value) reviewCanShow = true;
+          ysdk.feedback.canReview().then(feedback => {
+            if (feedback.value) reviewCanShow = true;
+          }).catch(e => console.error('Error in canReview:', e));
         } catch (e) { console.error(e); }
 
-        FullAdShow(); // Optional: can skip ads
+        // Try to show fullscreen ad
+        FullAdShow();
+        
         if (initGame) InitPlayer(photoSizeForInit, scopesForInit);
         initSDK = true;
       });
@@ -260,36 +233,53 @@
 
         function InitPlayer(photoSize, _scopes) {
             try {
-                return ysdk.getPlayer({ scopes: _scopes }).then(_player => {
+                if (window.ysdk && typeof window.ysdk.getPlayer === 'function') {
+                    return window.ysdk.getPlayer({ scopes: _scopes }).then(_player => {
+                        player = _player;
 
-                    player = _player;
+                        let playerName = player.getName();
+                        let playerPhoto = player.getPhoto(photoSize);
 
-                    let playerName = player.getName();
-                    let playerPhoto = player.getPhoto(photoSize);
+                        if (!_scopes) {
+                            playerName = "anonymous";
+                            playerPhoto = "null";
+                        }
 
-                    if (!_scopes) {
-                        playerName = "anonymous";
-                        playerPhoto = "null";
-                    }
-
-                    if (player.getMode() === 'lite') {
-
-                        console.log('Not Authorized');
+                        if (player.getMode() === 'lite') {
+                            console.log('Not Authorized');
+                            NotAuthorized();
+                        } else {
+                            let authJson = {
+                                "playerAuth": "resolved",
+                                "playerName": playerName,
+                                "playerId": player.getUniqueID(),
+                                "playerPhoto": playerPhoto
+                            };
+                            if (myGameInstance) {
+                                myGameInstance.SendMessage('YandexGame', 'SetInitializationSDK', JSON.stringify(authJson));
+                            } else {
+                                console.log('Mock: SetInitializationSDK would be called with:', authJson);
+                            }
+                            window.focus();
+                        }
+                    }).catch(e => {
+                        console.error('Authorized err: ', e.message);
                         NotAuthorized();
-                    } else {
-                        let authJson = {
-                            "playerAuth": "resolved",
-                            "playerName": playerName,
-                            "playerId": player.getUniqueID(),
-                            "playerPhoto": playerPhoto
-                        };
+                    });
+                } else {
+                    console.log('Mock: Using fallback player initialization');
+                    let authJson = {
+                        "playerAuth": "resolved",
+                        "playerName": "MockPlayer",
+                        "playerId": "mock-player-id",
+                        "playerPhoto": "null"
+                    };
+                    if (myGameInstance) {
                         myGameInstance.SendMessage('YandexGame', 'SetInitializationSDK', JSON.stringify(authJson));
-                        window.focus();
+                    } else {
+                        console.log('Mock: SetInitializationSDK would be called with:', authJson);
                     }
-                }).catch(e => {
-                    console.error('Authorized err: ', e.message);
-                    NotAuthorized();
-                });
+                }
             } catch (e) {
                 console.error('CRASH init Player: ', e.message);
                 window.focus();
@@ -310,34 +300,39 @@
 
         function FullAdShow() {
             try {
-                window.ysdk.adv.showFullscreenAdv(
-                    {
-                        callbacks: {
-                            onOpen: () => {
-                                console.log('Open Fullscreen Ad');
-                                nowFullAdOpen = true;
-                                if (initGame === true)
-                                    myGameInstance.SendMessage('YandexGame', 'OpenFullAd');
-                            },
-                            onClose: (wasShown) => {
-                                nowFullAdOpen = false;
-                                if (initGame === true) {
-                                    if (wasShown) {
-                                        myGameInstance.SendMessage('YandexGame', 'CloseFullAd', 'true');
+                if (window.ysdk && window.ysdk.adv && typeof window.ysdk.adv.showFullscreenAdv === 'function') {
+                    window.ysdk.adv.showFullscreenAdv(
+                        {
+                            callbacks: {
+                                onOpen: () => {
+                                    console.log('Open Fullscreen Ad');
+                                    nowFullAdOpen = true;
+                                    if (initGame === true && myGameInstance)
+                                        myGameInstance.SendMessage('YandexGame', 'OpenFullAd');
+                                },
+                                onClose: (wasShown) => {
+                                    nowFullAdOpen = false;
+                                    if (initGame === true && myGameInstance) {
+                                        if (wasShown) {
+                                            myGameInstance.SendMessage('YandexGame', 'CloseFullAd', 'true');
+                                        }
+                                        else {
+                                            myGameInstance.SendMessage('YandexGame', 'CloseFullAd', 'false');
+                                        }
                                     }
-                                    else {
-                                        myGameInstance.SendMessage('YandexGame', 'CloseFullAd', 'false');
-                                    }
+                                    window.focus();
+                                },
+                                onError: (error) => {
+                                    console.error('Error Fullscreen Ad', error);
+                                    if (myGameInstance)
+                                        myGameInstance.SendMessage('YandexGame', 'ErrorFullAd');
+                                    window.focus();
                                 }
-                                window.focus();
-                            },
-                            onError: (error) => {
-                                console.error('Error Fullscreen Ad', error);
-                                myGameInstance.SendMessage('YandexGame', 'ErrorFullAd');
-                                window.focus();
                             }
-                        }
-                    });
+                        });
+                } else {
+                    console.log('Mock: Fullscreen Ad skipped (not available in mock)');
+                }
             } catch (e) {
                 console.error('CRASH FullAd Show: ', e.message);
             }
