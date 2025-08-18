@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+  <meta charset="utf-8"/>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Grow a Garden (Simple)</title>
+  <style>
+    canvas:focus {
+      outline: none;
+    }
+
+    html, body {
+      padding: 0;
+      margin: 0;
+      overflow: hidden;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: rgba(0,0,0,0);
+      height: 100%;
+    }
+    
+    #unity-container {
+      width: 100%;
+      height: 100%;
+    }
+    
+    #unity-canvas {
+      width: 100%;
+      height: 100%;
+      background: #000;
+    }
+    
+    #loading-cover {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: url('Images/background.png') center / cover;
+    }
+    
+    #unity-loading-bar {
+      position: relative;
+      width: 200px;
+      height: 30px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 5px;
+    }
+    
+    #unity-progress-bar-empty {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      border-radius: 5px;
+    }
+    
+    #unity-progress-bar-full {
+      position: absolute;
+      width: 0%;
+      height: 100%;
+      background: #fff;
+      border-radius: 5px;
+      transition: width 0.2s;
+    }
+    
+    .spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    
+    #status-message {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    }
+  </style>
+</head>
+<body class="dark">
+  <div id="unity-container" class="unity-desktop">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+  </div>
+  <div id="loading-cover">
+    <div id="unity-loading-bar">
+      <div id="unity-progress-bar-empty">
+        <div id="unity-progress-bar-full"></div>
+      </div>
+      <div class="spinner"></div>
+    </div>
+    <div id="status-message">Loading game files...</div>
+  </div>
+  
+  <script>
+    // Define global variables and functions that the game might be looking for
+    window.player = null;
+    window.nowFullAdOpen = false;
+    window.promptCanShow = false;
+    window.reviewCanShow = false;
+    window.ygGameInstance = null;
+    window.initYSDK = false;
+    window.initGame = false;
+    window.syncInit = false;
+    window.NO_DATA = 'no data';
+    
+    // Define game provider functions
+    window.gameProviderStart = function() {
+      console.log("gameProviderStart called");
+    };
+    
+    window.gameProviderStop = function() {
+      console.log("gameProviderStop called");
+    };
+    
+    // Mock the functions that the game is trying to call
+    window.InterAdvShow = function() {
+      console.log("InterAdvShow called");
+    };
+    
+    window.RequestingEnvironmentData = function() {
+      console.log("RequestingEnvironmentData called");
+      return Promise.resolve();
+    };
+    
+    window.InitPlayer = function() {
+      console.log("InitPlayer called");
+      window.player = {
+        getName: function() { return "Player"; },
+        getPhoto: function() { return null; },
+        getUniqueID: function() { return "local-player"; },
+        getMode: function() { return "resolved"; },
+        setData: function(data) {
+          console.log("player.setData called with data:", data);
+          return Promise.resolve();
+        },
+        getData: function() {
+          console.log("player.getData called");
+          return Promise.resolve({ saves: null });
+        }
+      };
+      return Promise.resolve();
+    };
+    
+    window.TVInit = function() {
+      console.log("TVInit called");
+    };
+    
+    window.LoadCloud = function() {
+      console.log("LoadCloud called");
+      return Promise.resolve("no data");
+    };
+    
+    window.InitReview = function() {
+      console.log("InitReview called");
+      return Promise.resolve();
+    };
+    
+    window.GetStats = function() {
+      console.log("GetStats called");
+      return Promise.resolve();
+    };
+    
+    window.InitPayments = function() {
+      console.log("InitPayments called");
+      return Promise.resolve();
+    };
+    
+    window.GetAllGames = function() {
+      console.log("GetAllGames called");
+      return Promise.resolve();
+    };
+    
+    window.InitLeaderboards = function() {
+      console.log("InitLeaderboards called");
+      return Promise.resolve();
+    };
+    
+    window.InitGameLabel = function() {
+      console.log("InitGameLabel called");
+      return Promise.resolve();
+    };
+    
+    window.GetFlags = function() {
+      console.log("GetFlags called");
+      return Promise.resolve();
+    };
+    
+    window.YG2Instance = function(method, arg) {
+      console.log("YG2Instance called with method:", method, "arg:", arg);
+    };
+    
+    window.LogStyledMessage = function(message) {
+      console.log('%c' + message, 'color: #FFDF73; background-color: #454545');
+    };
+    
+    // Create a mock of the Yandex SDK
+    window.ysdk = {
+      // Game provider methods
+      gameplayStart: function() {
+        console.log("ysdk.gameplayStart called");
+        return Promise.resolve();
+      },
+      gameplayStop: function() {
+        console.log("ysdk.gameplayStop called");
+        return Promise.resolve();
+      },
+      
+      // Player methods
+      getPlayer: function() {
+        console.log("ysdk.getPlayer called");
+        window.player = {
+          getName: function() { return "Player"; },
+          getPhoto: function() { return null; },
+          getUniqueID: function() { return "local-player"; },
+          getMode: function() { return "resolved"; },
+          setData: function(data) {
+            console.log("player.setData called with data:", data);
+            return Promise.resolve();
+          },
+          getData: function() {
+            console.log("player.getData called");
+            return Promise.resolve({ saves: null });
+          }
+        };
+        return Promise.resolve(window.player);
+      },
+      
+      // Advertising methods
+      adv: {
+        showFullscreenAdv: function(options) {
+          console.log("showFullscreenAdv called");
+          if (options && options.callbacks) {
+            window.nowFullAdOpen = true;
+            if (options.callbacks.onOpen) options.callbacks.onOpen();
+            setTimeout(() => {
+              window.nowFullAdOpen = false;
+              if (options.callbacks.onClose) options.callbacks.onClose(true);
+            }, 300);
+          }
+        },
+        showRewardedVideo: function(options) {
+          console.log("showRewardedVideo called");
+          if (options && options.callbacks) {
+            if (options.callbacks.onOpen) options.callbacks.onOpen();
+            setTimeout(() => {
+              if (options.callbacks.onRewarded) options.callbacks.onRewarded();
+              if (options.callbacks.onClose) options.callbacks.onClose();
+            }, 300);
+          }
+        },
+        getBannerAdvStatus: function() {
+          return Promise.resolve({ stickyAdvIsShowing: false });
+        },
+        showBannerAdv: function() {
+          console.log("showBannerAdv called");
+        },
+        hideBannerAdv: function() {
+          console.log("hideBannerAdv called");
+        }
+      },
+      
+      // Device info
+      deviceInfo: {
+        isMobile: function() { return false; },
+        isTablet: function() { return false; },
+        isTV: function() { return false; },
+        isDesktop: function() { return true; }
+      },
+      
+      // Screen methods
+      screen: {
+        fullscreen: {
+          status: 'off',
+          request: function() {
+            console.log("fullscreen.request called");
+          }
+        }
+      },
+      
+      // Event methods
+      onEvent: function(event, callback) {
+        console.log("onEvent called with event:", event);
+      },
+      dispatchEvent: function(event) {
+        console.log("dispatchEvent called with event:", event);
+      },
+      
+      // Constants
+      EVENTS: {
+        HISTORY_BACK: 'history_back',
+        EXIT: 'exit'
+      },
+      
+      // Features
+      features: {
+        LoadingAPI: {
+          ready: function() {
+            console.log("LoadingAPI.ready called");
+          }
+        }
+      }
+    };
+    
+    // Mock YaGames.init()
+    window.YaGames = {
+      init: function() {
+        console.log("YaGames.init() called");
+        return Promise.resolve(window.ysdk);
+      }
+    };
+    
+    // Disable right-click context menu
+    document.addEventListener('contextmenu', event => event.preventDefault());
+    
+    // Focus game when clicked
+    function FocusGame() {
+      window.focus();
+      document.querySelector('#unity-canvas').focus();
+    }
+    
+    window.addEventListener('pointerdown', FocusGame);
+    window.addEventListener('touchstart', FocusGame);
+    
+    // Handle visibility changes
+    document.addEventListener('visibilitychange', function() {
+      if (window.ysdk !== null && window.initGame === true) {
+        if (document.hidden) {
+          window.YG2Instance('SetFocusWindowGame', 'false');
+        } else {
+          window.YG2Instance('SetFocusWindowGame', 'true');
+        }
+      }
+    });
+    
+    // Unity configuration
+    const hideFullScreenButton = "";
+    const buildUrl = "Build";
+    const loaderUrl = buildUrl + "/bb0d9ecdb05db3e84da20bd14a4f84dc.loader.js";
+    const config = {
+      dataUrl: buildUrl + "/191bd9deb747a40a7c6d87626b67611a.data.br",
+      frameworkUrl: buildUrl + "/f0f0e9c66c37a9a38e57535c958d9fac.framework.js.br",
+      codeUrl: buildUrl + "/a25b930682331dad45505fdd342f0b74.wasm.br",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "RobloxFarmURP",
+      productVersion: "0.1.0"
+    };
+    
+    const container = document.querySelector("#unity-container");
+    const canvas = document.querySelector("#unity-canvas");
+    const loadingCover = document.querySelector("#loading-cover");
+    const progressBarEmpty = document.querySelector("#unity-progress-bar-empty");
+    const progressBarFull = document.querySelector("#unity-progress-bar-full");
+    const spinner = document.querySelector('.spinner');
+    const statusMessage = document.querySelector('#status-message');
+    
+    // Check if we can go fullscreen
+    const canFullscreen = (function() {
+      for (const key of [
+        'exitFullscreen',
+        'webkitExitFullscreen',
+        'webkitCancelFullScreen',
+        'mozCancelFullScreen',
+        'msExitFullscreen',
+      ]) {
+        if (key in document) {
+          return true;
+        }
+      }
+      return false;
+    }());
+    
+    // Set mobile class if on mobile device
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      container.className = "unity-mobile";
+    }
+    
+    // Load the Unity loader script
+    const script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = () => {
+      // Start Unity
+      statusMessage.textContent = "Starting game...";
+      createUnityInstance(canvas, config, (progress) => {
+        spinner.style.display = "none";
+        progressBarEmpty.style.display = "";
+        progressBarFull.style.width = `${100 * progress}%`;
+        statusMessage.textContent = `Loading game: ${Math.round(progress * 100)}%`;
+      }).then((unityInstance) => {
+        window.ygGameInstance = unityInstance;
+        loadingCover.style.display = "none";
+        
+        // Initialize the game
+        window.initGame = true;
+        window.initYSDK = true;
+        
+        // Call YG2Instance to notify that SDK is initialized
+        setTimeout(function() {
+          if (window.ygGameInstance) {
+            window.ygGameInstance.SendMessage('YG2Instance', 'InitSDKComplete');
+          }
+        }, 1000);
+        
+        // Add a global error handler to catch and fix any errors
+        window.addEventListener('error', function(event) {
+          console.log('Global error handler caught:', event.error);
+          
+          // If the error is related to the SDK, prevent it from crashing the game
+          if (event.error && event.error.message && 
+              (event.error.message.includes('ysdk') || 
+               event.error.message.includes('YaGames') || 
+               event.error.message.includes('provider'))) {
+            console.log('Fixing SDK-related error');
+            event.preventDefault();
+            return true;
+          }
+          
+          return false;
+        });
+        
+      }).catch((message) => {
+        console.error(message);
+        statusMessage.textContent = "Error loading game: " + message;
+      });
+    };
+    
+    script.onerror = () => {
+      statusMessage.textContent = "Error loading Unity loader script";
+    };
+    
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
